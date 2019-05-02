@@ -1,74 +1,108 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import PoseStamped
-from styx_msgs.msg import Lane, Waypoint
+from geometry_msgs.msg import PoseStamped, TwistStamped
+from styx_msgs.msg import Lane
+from std_msgs.msg import Int32
+from scipy.spatial import KDTree
 
-import math
+import copy
 
-'''
-This node will publish waypoints from the car's current position to some `x` distance ahead.
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. 
 
-As mentioned in the doc, you should ideally first implement a version which does not care
-about traffic lights or obstacles.
+class WPControl(object):
 
-Once you have created dbw_node, you will update this node to use the status of traffic lights too.
+    def __init__(self):
 
-Please note that our simulator also provides the exact location of traffic lights and their
-current status in `/vehicle/traffic_lights` message. You can use this message to build this node
-as well as to verify your TL classifier.
+        self.waypoints = None
+        self.waypoints_pos = None
+        self.wp_tree = None
 
-TODO (for Yousuf and Aaron): Stopline location for each traffic light.
-'''
+    def waypoints_cb(self, waypoints):
+        if not self.waypoints_pos:
+            self.waypoints = waypoints
+            self.waypoints_pos = [ [w.pose.pose.position.x, w.pose.pose.position.y] for w in waypoints.waypoints]
+            # KDTree for waypoints search 
+            self.wp_tree = KDTree(self.waypoints_pos)
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+    def is_ready(self):
+        return self.wp_tree is not None
 
+    def waypoint(self, i):
+        return self.waypoints.waypoints[i]   
+
+    # Next waypoint ahead of the vehicle
+    def next_waypoint_i(self, pose):       
+        position = [pose.position.x, pose.position.y]
+        current_wp_i = self.wp_tree.query(position, 1)[1] 
+        return current_wp_i
+
+
+    def copy_wps(self, start_i, count):
+        last_i = min(len(self.waypoints.waypoints), start_i + count)
+        lane = Lane()
+        lane.header = self.waypoints.header
+        lane.waypoints = copy.deepcopy(self.waypoints.waypoints[start_i : last_i])
+        return lane
 
 class WaypointUpdater(object):
+
     def __init__(self):
+                
         rospy.init_node('waypoint_updater')
 
+        self.wp_control = WPControl()
+
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-
+        rospy.Subscriber('/base_waypoints', Lane, self.wp_control.waypoints_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.velocity_cb)
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
-        # TODO: Add other member variables you need below
+        self.vehicle = None
 
-        rospy.spin()
+        self.next_light_i = -1
+        self.vehicle_velocity = 0 
+
+        self.loop()
+
 
     def pose_cb(self, msg):
-        # TODO: Implement
-        pass
-
-    def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
+        self.vehicle = msg
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        self.next_light_i = msg.data
 
-    def obstacle_cb(self, msg):
-        # TODO: Callback for /obstacle_waypoint message. We will implement it later
-        pass
+    def velocity_cb(self, velocity):
+        self.vehicle_velocity = velocity.twist.linear.x
 
-    def get_waypoint_velocity(self, waypoint):
-        return waypoint.twist.twist.linear.x
 
-    def set_waypoint_velocity(self, waypoints, waypoint, velocity):
-        waypoints[waypoint].twist.twist.linear.x = velocity
+    def loop(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            if self.vehicle and self.wp_control.is_ready() and self.vehicle_velocity:
+                start_i = self.wp_control.next_waypoint_i(self.vehicle.pose) # next waypoint to vehicle
+                if self.next_light_i != -1:
+                    step_count = self.next_light_i - start_i
+                    lane = self.wp_control.copy_wps(start_i, step_count)
+                    self.decelerate(lane.waypoints, start_i)
+                else:
+                    lane = self.wp_control.copy_wps(start_i, LOOKAHEAD_WPS)
+                self.final_waypoints_pub.publish(lane)
 
-    def distance(self, waypoints, wp1, wp2):
-        dist = 0
-        dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
-        for i in range(wp1, wp2+1):
-            dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
-            wp1 = i
-        return dist
+            rate.sleep()
+
+ 
+    def decelerate(self, waypoints, start_i):
+        step_count = len(waypoints) - 1
+        stop_i = step_count - 2
+        target_speed = self.vehicle_velocity
+        velocity_decrement = target_speed / step_count if step_count > 0 else target_speed
+        for i, wp in enumerate(waypoints):
+            target_speed -= velocity_decrement
+            if target_speed <= 1 or i >= stop_i: target_speed = 0
+            wp.twist.twist.linear.x = target_speed #set waypoint target speed
 
 
 if __name__ == '__main__':

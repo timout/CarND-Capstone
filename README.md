@@ -88,3 +88,9 @@ Specific to these libraries, the simulator grader and Carla use the following:
 | OpenMP | N/A | N/A |
 
 We are working on a fix to line up the OpenCV versions between the two.
+
+
+### Notes
+
+1. Tensorflow v1.3 was recompiled with SSE support  
+- https://www.tensorflow.org/install/source   ( -march=native ) 
