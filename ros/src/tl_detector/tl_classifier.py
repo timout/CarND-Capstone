@@ -6,7 +6,7 @@ import datetime
 class TLClassifier(object):
     def __init__(self, is_simulator):
 
-        self.result_map = { 1: TrafficLight.GREEN, 2: TrafficLight.RED, 2: TrafficLight.YELLOW  }
+        self.result_map = { 1: TrafficLight.GREEN, 2: TrafficLight.RED, 3: TrafficLight.YELLOW  }
 
         graph_path = self._get_file_path(is_simulator)
 
