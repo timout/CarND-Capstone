@@ -48,4 +48,4 @@ class TLClassifier(object):
         if is_simulator:
             return 'model/simulator_graph.pb'
         else:
-            return 'model/real_graph.pb'
+            return 'model/site_graph.pb'
