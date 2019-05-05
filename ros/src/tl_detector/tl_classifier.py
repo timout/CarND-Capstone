@@ -9,14 +9,15 @@ class TLClassifier(object):
         self.result_map = { 1: TrafficLight.GREEN, 2: TrafficLight.RED, 3: TrafficLight.YELLOW  }
 
         graph_path = self._get_file_path(is_simulator)
+        #print(graph_path)
 
         self.graph = tf.Graph()
         self.threshold = .5
 
         with self.graph.as_default():
             graph_def = tf.GraphDef()
-            with tf.gfile.GFile(graph_path, 'rb') as fid:
-                graph_def.ParseFromString(fid.read())
+            with tf.gfile.GFile(graph_path, 'rb') as gf:
+                graph_def.ParseFromString(gf.read())
                 tf.import_graph_def(graph_def, name='')
 
             self.image_tensor = self.graph.get_tensor_by_name('image_tensor:0')
@@ -37,8 +38,6 @@ class TLClassifier(object):
 
         r_scores = np.squeeze(scores)
         r_classes = np.squeeze(classes).astype(np.int32)
-
-        print('Classes: ', r_classes[0] ,' Scores: ', r_scores[0], " time: ", tm.total_seconds())
 
         r_class = 4 if r_scores[0] < self.threshold else r_classes[0]
 

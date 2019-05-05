@@ -14,7 +14,7 @@ import math
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 2
-I_COUNT_CHECK = 4
+I_COUNT_CHECK = 3
 
 VEHICLE_LEN = 5.
 
@@ -94,7 +94,6 @@ class TLDetector(object):
 
         self.config = yaml.load(rospy.get_param("/traffic_light_config"))
         self.is_simulator = not self.config["is_site"]
-        print("Is Simulator %d" % self.is_simulator)
         
         #self.process_image_fn = self.process_image_test()
         self.process_image_fn = self.process_image_sim if self.is_simulator else self.process_image
@@ -115,8 +114,6 @@ class TLDetector(object):
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        
-        #self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
         self.last_wp_i = -1
@@ -138,7 +135,7 @@ class TLDetector(object):
     def loop(self):
         rate = rospy.Rate(10)
         while not self.wp_control.is_ready():
-            print("is not ready")
+            #print("is not ready")
             rate.sleep()
 
         while not rospy.is_shutdown():
@@ -150,8 +147,6 @@ class TLDetector(object):
                     self.last_wp_i = -1
                     self.upcoming_red_light_pub.publish(Int32(self.last_wp_i))
                 else:
-                    #print("SP:Light WP Index: ",light_wp_i, "Traffic Light: ", self.state)
-
                     if self.state_count >= STATE_COUNT_THRESHOLD:
                         if self.state != TrafficLight.RED: light_wp_i = -1                               
                         self.last_wp_i = light_wp_i
@@ -159,7 +154,7 @@ class TLDetector(object):
                     else:
                         self.upcoming_red_light_pub.publish(Int32(self.last_wp_i))
                       
-                    print("SP: State: ", self.state, " Count: ", self.state_count, " Last wp i:" , self.last_wp_i, " stop line i: ", self.stop_line_i)            
+                    #print("SP: State: ", self.state, " Count: ", self.state_count, " Last wp i:" , self.last_wp_i, " stop line i: ", self.stop_line_i)            
 
             rate.sleep()
 
@@ -173,6 +168,7 @@ class TLDetector(object):
 
     def image_cb(self, msg):
         """ Camera images receiver """
+        #self.start_classification = True
         self.camera_image = msg
         if not self.start_classification: 
             self.state = TrafficLight.UNKNOWN
@@ -220,15 +216,15 @@ class TLDetector(object):
 
     def process_classified_image_state(self, cur_img_state):
         """ Process classified light image state to find current state"""
-        self.print_img_color(cur_img_state)
+        #self.print_img_color(cur_img_state)
         #default is red
         if self.state == TrafficLight.UNKNOWN and cur_img_state == TrafficLight.UNKNOWN:
             self.state = TrafficLight.RED
             cur_img_state = TrafficLight.RED
-        elif self.state != TrafficLight.UNKNOWN and cur_img_state == TrafficLight.UNKNOWN:
-            cur_img_state = self.state
 
-        if self.state != cur_img_state:
+        if self.state != TrafficLight.UNKNOWN and cur_img_state == TrafficLight.UNKNOWN:
+            cur_img_state = self.state
+        elif self.state != cur_img_state:
             self.state_count = 0
             self.state = cur_img_state
         else:
