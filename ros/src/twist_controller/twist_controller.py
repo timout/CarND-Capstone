@@ -43,7 +43,6 @@ class Controller(object):
         v_delta = current_velocity - self.last_velocity
         self.last_velocity = current_velocity
 
-        #if delta_t > 1. / 5 or delta_t < 1e-4:
         if delta_t == 0:
             self.reset()
             return 0., 0., 0.

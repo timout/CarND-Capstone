@@ -14,7 +14,7 @@ import math
 from scipy.spatial import KDTree
 
 STATE_COUNT_THRESHOLD = 2
-I_COUNT_CHECK = 3
+I_COUNT_CHECK = 4
 
 VEHICLE_LEN = 5.
 
